@@ -1,0 +1,1087 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+
+function Toast({ message, type, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <div className={`toast ${type}`}>
+      {type === 'success' ? '✅' : '❌'} {message}
+    </div>
+  );
+}
+
+function AssignmentModal({ adminKey, assignment, onClose, onSuccess }) {
+  const isEditing = !!assignment;
+  const [title, setTitle] = useState(assignment?.title || '');
+  const [description, setDescription] = useState(assignment?.description || '');
+  const [deadline, setDeadline] = useState(assignment?.deadline || '');
+  const [maxScore, setMaxScore] = useState(assignment?.maxScore || 10);
+  const [worksheetUrl, setWorksheetUrl] = useState(assignment?.worksheetUrl || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+
+    setSaving(true);
+    try {
+      const method = isEditing ? 'PATCH' : 'POST';
+      const bodyData = { 
+        title, description, deadline, maxScore: Number(maxScore), worksheetUrl, adminKey 
+      };
+      if (isEditing) {
+        bodyData.id = assignment.id;
+      }
+
+      const res = await fetch('/api/assignments', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyData),
+      });
+
+      if (res.ok) {
+        onSuccess();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (err) {
+      alert(isEditing ? 'ไม่สามารถแก้ไขงานได้' : 'ไม่สามารถเพิ่มงานได้');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h2>{isEditing ? '✏️ แก้ไขงาน' : '➕ เพิ่มงานใหม่'}</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>ชื่องาน *</label>
+            <input
+              type="text"
+              className="form-input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="เช่น ใบงานที่ 4: พืชรอบตัวเรา"
+              required
+              autoFocus
+            />
+          </div>
+
+          <div className="form-group">
+            <label>รายละเอียด</label>
+            <textarea
+              className="form-textarea"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="อธิบายรายละเอียดงาน..."
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className="form-group">
+              <label>กำหนดส่ง</label>
+              <input
+                type="date"
+                className="form-input"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>คะแนนเต็ม</label>
+              <input
+                type="number"
+                className="form-input"
+                value={maxScore}
+                onChange={(e) => setMaxScore(e.target.value)}
+                min={1}
+                max={100}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>🔗 ลิงก์ใบงาน (URL)</label>
+            <input
+              type="url"
+              className="form-input"
+              value={worksheetUrl}
+              onChange={(e) => setWorksheetUrl(e.target.value)}
+              placeholder="https://docs.google.com/... หรือลิงก์ใบงาน"
+            />
+          </div>
+
+          <div className="modal-actions">
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose} disabled={saving}>
+              ยกเลิก
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary btn-sm"
+              disabled={!title.trim() || saving}
+              style={{ width: 'auto', opacity: !title.trim() ? 0.5 : 1 }}
+            >
+              {saving ? 'กำลังบันทึก...' : '💾 บันทึก'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function StudentModal({ adminKey, student, onClose, onSuccess }) {
+  const isEditing = !!student;
+  const [id, setId] = useState(student?.id || '');
+  const [name, setName] = useState(student?.name || '');
+  const [nickname, setNickname] = useState(student?.nickname || '');
+  const [room, setRoom] = useState(student?.room || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!id.trim() || !name.trim()) return;
+
+    setSaving(true);
+    try {
+      const method = isEditing ? 'PATCH' : 'POST';
+      const bodyData = { 
+        adminKey,
+        student: isEditing ? undefined : { id, name, nickname, room },
+        updates: isEditing ? { id, name, nickname, room } : undefined,
+        id: isEditing ? student.id : undefined // Original ID if editing
+      };
+
+      const res = await fetch('/api/admin/students', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyData),
+      });
+
+      if (res.ok) {
+        onSuccess();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (err) {
+      alert(isEditing ? 'ไม่สามารถแก้ไขข้อมูลได้' : 'ไม่สามารถเพิ่มรายชื่อได้');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h2>{isEditing ? '✏️ แก้ไขข้อมูลนักเรียน' : '➕ เพิ่มนักเรียนใหม่'}</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>รหัสนักเรียน (5 หลัก) *</label>
+            <input
+              type="text"
+              className="form-input"
+              value={id}
+              onChange={(e) => setId(e.target.value)}
+              placeholder="เช่น 67001"
+              required
+              autoFocus
+            />
+          </div>
+          <div className="form-group">
+            <label>ชื่อ-นามสกุล *</label>
+            <input
+              type="text"
+              className="form-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="เช่น ธนกฤต สุขสมบูรณ์"
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>ชื่อเล่น</label>
+            <input
+              type="text"
+              className="form-input"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder="เช่น กฤต"
+            />
+          </div>
+          <div className="form-group">
+            <label>ห้องเรียน</label>
+            <input
+              type="text"
+              className="form-input"
+              value={room}
+              onChange={(e) => setRoom(e.target.value)}
+              placeholder="เช่น ม.1/1"
+            />
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose} disabled={saving}>
+              ยกเลิก
+            </button>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={!id.trim() || !name.trim() || saving}>
+              {saving ? 'กำลังบันทึก...' : '💾 บันทึก'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function BulkStudentModal({ adminKey, onClose, onSuccess }) {
+  const [bulkText, setBulkText] = useState('');
+  const [room, setRoom] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!bulkText.trim()) return;
+
+    setSaving(true);
+    try {
+      const lines = bulkText.split('\n').map(line => line.trim()).filter(line => line);
+      const students = [];
+      
+      for (const line of lines) {
+        // match pattern: id then name (maybe nickname at the end if we want, but let's just do id and name for now)
+        // usually copy paste from excel will be separated by tab
+        const parts = line.split(/\t+|\s{2,}| /); // split by tab, multiple spaces, or single space
+        if (parts.length >= 2) {
+          const id = parts[0];
+          const name = parts.slice(1).join(' '); // Rejoin the rest as name
+          students.push({ id, name, room });
+        }
+      }
+
+      if (students.length === 0) {
+        alert('ไม่พบข้อมูลนักเรียนในรูปแบบที่ถูกต้อง (ต้องมี รหัส และ ชื่อ)');
+        setSaving(false);
+        return;
+      }
+
+      const res = await fetch('/api/admin/students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bulk', students, adminKey }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message);
+        onSuccess();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'เกิดข้อผิดพลาด');
+      }
+    } catch (err) {
+      alert('ไม่สามารถเพิ่มข้อมูลได้');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+        <h2>📋 วางรายชื่อนักเรียน (Bulk Add)</h2>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+          คัดลอกรายชื่อจาก Excel หรือ Google Sheets มาวางที่นี่<br/>
+          <strong>รูปแบบ:</strong> รหัสนักเรียน <i>(เว้นวรรค/Tab)</i> ชื่อ-นามสกุล
+        </p>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>ห้องเรียน (กำหนดให้ทุกคนที่นำเข้า)</label>
+            <input
+              type="text"
+              className="form-input"
+              value={room}
+              onChange={(e) => setRoom(e.target.value)}
+              placeholder="เช่น ม.1/1 (ไม่บังคับ)"
+            />
+          </div>
+          <div className="form-group">
+            <label>รายชื่อ</label>
+            <textarea
+              className="form-textarea"
+              style={{ minHeight: '200px', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              placeholder={`67001 สมชาย ใจดี\n67002 สมหญิง สวยงาม`}
+              required
+              autoFocus
+            />
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onClose} disabled={saving}>
+              ยกเลิก
+            </button>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={!bulkText.trim() || saving}>
+              {saving ? 'กำลังประมวลผล...' : '➕ นำเข้ารายชื่อ'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default function AdminPage() {
+  const [activeTab, setActiveTab] = useState('summary');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [adminKey, setAdminKey] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [subjectName, setSubjectName] = useState('');
+  const [className, setClassName] = useState('');
+  const [adminAvatarUrl, setAdminAvatarUrl] = useState('');
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [editAssignment, setEditAssignment] = useState(null);
+  
+  // Student management states
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [showBulkStudentModal, setShowBulkStudentModal] = useState(false);
+  const [editStudent, setEditStudent] = useState(null);
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [filterRoom, setFilterRoom] = useState('');
+
+  // Drag to check states
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragTargetStatus, setDragTargetStatus] = useState(null);
+
+  const [toasts, setToasts] = useState([]);
+  const router = useRouter();
+  const fileInputRef = useRef(null);
+
+  const addToast = (message, type = 'success') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+  };
+
+  const removeToast = (id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const fetchData = useCallback(async (key) => {
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminKey: key }),
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        setData(result);
+        if (result.settings) {
+          setSubjectName(result.settings.subjectName || '');
+          setClassName(result.settings.className || '');
+          setAdminAvatarUrl(result.settings.adminAvatarUrl || '');
+        }
+      } else {
+        router.push('/');
+      }
+    } catch (err) {
+      console.error('Error loading admin data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
+
+  useEffect(() => {
+    const key = sessionStorage.getItem('adminKey');
+    if (!key) {
+      router.push('/');
+      return;
+    }
+    setAdminKey(key);
+    fetchData(key);
+  }, [router, fetchData]);
+
+  const handleDeleteAssignment = async (id, title) => {
+    if (!confirm(`ต้องการลบ "${title}" หรือไม่?\nข้อมูลการส่งงานที่เกี่ยวข้องจะถูกลบด้วย`)) return;
+
+    try {
+      const res = await fetch(`/api/assignments?id=${id}&adminKey=${adminKey}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        addToast('ลบงานสำเร็จ');
+        fetchData(adminKey);
+      }
+    } catch (err) {
+      addToast('ไม่สามารถลบงานได้', 'error');
+    }
+  };
+
+  const handleUpdateSubmission = async (studentId, assignmentId, currentStatus, currentScore, overrideTargetStatus = null, overrideTargetScore = undefined) => {
+    const targetStatus = overrideTargetStatus !== null ? overrideTargetStatus : !currentStatus;
+    const targetScore = overrideTargetScore !== undefined ? overrideTargetScore : currentScore;
+    
+    if (currentStatus === targetStatus && currentScore === targetScore) return; // No change needed
+
+    // Optimistic UI Update
+    setData(prevData => {
+      const newData = { ...prevData };
+      const newSummaryData = [...newData.submissions];
+      const studentIndex = newSummaryData.findIndex(s => s.student.id === studentId);
+      if (studentIndex !== -1) {
+        newSummaryData[studentIndex] = {
+          ...newSummaryData[studentIndex],
+          submissions: {
+            ...newSummaryData[studentIndex].submissions,
+            [assignmentId]: {
+              ...newSummaryData[studentIndex].submissions[assignmentId],
+              submitted: targetStatus,
+              score: targetScore,
+              submittedAt: (targetStatus && !currentStatus) ? new Date().toISOString() : newSummaryData[studentIndex].submissions[assignmentId]?.submittedAt
+            }
+          }
+        };
+      }
+      newData.submissions = newSummaryData;
+      return newData;
+    });
+
+    try {
+      const res = await fetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId,
+          assignmentId,
+          submitted: targetStatus,
+          score: targetScore,
+          adminKey
+        }),
+      });
+
+      if (!res.ok) {
+        fetchData(adminKey);
+        addToast('เกิดข้อผิดพลาดในการบันทึก', 'error');
+      }
+    } catch (err) {
+      fetchData(adminKey);
+      addToast('เกิดข้อผิดพลาดในการบันทึก', 'error');
+    }
+  };
+
+  const handleCellMouseDown = (studentId, assignmentId, currentStatus, currentScore) => {
+    setIsDragging(true);
+    const target = !currentStatus;
+    setDragTargetStatus({ submitted: target, score: currentScore });
+    handleUpdateSubmission(studentId, assignmentId, currentStatus, currentScore, target, currentScore);
+  };
+
+  const handleCellMouseEnter = (studentId, assignmentId, currentStatus, currentScore) => {
+    if (isDragging && dragTargetStatus !== null) {
+      handleUpdateSubmission(studentId, assignmentId, currentStatus, currentScore, dragTargetStatus.submitted, dragTargetStatus.score);
+    }
+  };
+
+  const handleScoreChange = (studentId, assignmentId, currentStatus, newScoreStr) => {
+    const newScore = newScoreStr === '' ? null : Number(newScoreStr);
+    const newStatus = newScore !== null ? true : currentStatus;
+    handleUpdateSubmission(studentId, assignmentId, currentStatus, undefined, newStatus, newScore);
+  };
+
+  const handleMouseUpOrLeave = () => {
+    setIsDragging(false);
+    setDragTargetStatus(null);
+  };
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('adminKey', adminKey);
+      formData.append('avatar', file);
+
+      const res = await fetch('/api/settings/avatar', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAdminAvatarUrl(data.settings.adminAvatarUrl);
+        addToast('เปลี่ยนรูปโปรไฟล์สำเร็จ');
+      } else {
+        addToast('ไม่สามารถเปลี่ยนรูปโปรไฟล์ได้', 'error');
+      }
+    } catch (err) {
+      addToast('เกิดข้อผิดพลาดในการเปลี่ยนรูปโปรไฟล์', 'error');
+    }
+  };
+
+  const handleDeleteStudent = async (id, name) => {
+    if (!confirm(`ต้องการลบนักเรียน ${id} - ${name} ใช่หรือไม่?\nข้อมูลการส่งงานที่เกี่ยวข้องจะสูญหาย`)) return;
+
+    try {
+      const res = await fetch(`/api/admin/students?id=${id}&adminKey=${adminKey}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        addToast('ลบนักเรียนสำเร็จ');
+        setSelectedStudents((prev) => prev.filter(selectedId => selectedId !== id));
+        fetchData(adminKey);
+      } else {
+        const data = await res.json();
+        addToast(data.error || 'ไม่สามารถลบนักเรียนได้', 'error');
+      }
+    } catch (err) {
+      addToast('เกิดข้อผิดพลาด', 'error');
+    }
+  };
+
+  const handleBulkDeleteStudents = async () => {
+    if (selectedStudents.length === 0) return;
+    if (!confirm(`ต้องการลบนักเรียนจำนวน ${selectedStudents.length} คน ใช่หรือไม่?\nข้อมูลการส่งงานที่เกี่ยวข้องจะสูญหายทั้งหมด`)) return;
+
+    try {
+      const ids = selectedStudents.join(',');
+      const res = await fetch(`/api/admin/students?action=bulk&ids=${ids}&adminKey=${adminKey}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        addToast(data.message || 'ลบนักเรียนสำเร็จ');
+        setSelectedStudents([]);
+        fetchData(adminKey);
+      } else {
+        const data = await res.json();
+        addToast(data.error || 'ไม่สามารถลบนักเรียนได้', 'error');
+      }
+    } catch (err) {
+      addToast('เกิดข้อผิดพลาด', 'error');
+    }
+  };
+
+  const toggleSelectStudent = (id) => {
+    setSelectedStudents(prev => 
+      prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = (filteredStudents) => {
+    if (selectedStudents.length === filteredStudents.length && filteredStudents.length > 0) {
+      setSelectedStudents([]);
+    } else {
+      setSelectedStudents(filteredStudents.map(s => s.student.id));
+    }
+  };
+
+  const handleEditLink = (assignment) => {
+    setEditLinkId(assignment.id);
+    setEditLinkUrl(assignment.worksheetUrl || '');
+  };
+
+  const handleSaveLink = async () => {
+    try {
+      const res = await fetch('/api/assignments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editLinkId, worksheetUrl: editLinkUrl, adminKey }),
+      });
+      if (res.ok) {
+        addToast('บันทึกลิงก์ใบงานสำเร็จ! 🔗');
+        setEditLinkId(null);
+        setEditLinkUrl('');
+        fetchData(adminKey);
+      } else {
+        addToast('ไม่สามารถบันทึกได้', 'error');
+      }
+    } catch (err) {
+      addToast('เกิดข้อผิดพลาด', 'error');
+    }
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('adminKey');
+    router.push('/');
+  };
+
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div className="spinner" />
+        <p className="loading-text">กำลังโหลดข้อมูล...</p>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const { students, assignments, submissions: summaryData } = data;
+
+  // Stats
+  const totalStudents = students.length;
+  const totalAssignments = assignments.length;
+  const totalExpected = totalStudents * totalAssignments;
+  const totalSubmitted = summaryData.reduce((acc, s) => {
+    return acc + Object.values(s.submissions).filter((v) => v.submitted).length;
+  }, 0);
+  const submitRate = totalExpected > 0 ? Math.round((totalSubmitted / totalExpected) * 100) : 0;
+
+  return (
+    <div className="page-container">
+      <div className="content-wrapper">
+        {/* Toast */}
+        <div className="toast-container">
+          {toasts.map((t) => (
+            <Toast key={t.id} message={t.message} type={t.type} onClose={() => removeToast(t.id)} />
+          ))}
+        </div>
+
+        {/* Header */}
+        <div className="student-header">
+          <div className="student-info" style={{ cursor: 'pointer' }} onClick={() => fileInputRef.current?.click()}>
+            <div 
+              className="student-avatar" 
+              style={adminAvatarUrl ? { background: 'none', padding: 0 } : { background: 'linear-gradient(135deg, #fc5c7c, #fcbc5c)' }}
+            >
+              {adminAvatarUrl ? (
+                <img src={adminAvatarUrl} alt="Admin" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+              ) : '👨‍🏫'}
+            </div>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              style={{ display: 'none' }} 
+              accept="image/*" 
+              onChange={handleAvatarChange} 
+            />
+            <div className="student-details">
+              <h2>แดชบอร์ดครู</h2>
+              <p>{subjectName || 'ระบบเก็บงานนักเรียน'} {className || 'ม.1/2569'}</p>
+            </div>
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
+            🚪 ออกจากระบบ
+          </button>
+        </div>
+
+        {/* Stats */}
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-value">{totalStudents}</div>
+            <div className="stat-label">👩‍🎓 นักเรียน</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{totalAssignments}</div>
+            <div className="stat-label">📋 งานทั้งหมด</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{totalSubmitted}/{totalExpected}</div>
+            <div className="stat-label">📤 ส่งงานแล้ว</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{submitRate}%</div>
+            <div className="stat-label">📊 อัตราการส่ง</div>
+          </div>
+        </div>
+
+        {/* Nav */}
+        <div className="admin-nav">
+          <button
+            className={`nav-btn ${activeTab === 'summary' ? 'active' : ''}`}
+            onClick={() => setActiveTab('summary')}
+          >
+            📊 สรุปการส่งงาน
+          </button>
+          <button
+            className={`nav-btn ${activeTab === 'assignments' ? 'active' : ''}`}
+            onClick={() => setActiveTab('assignments')}
+          >
+            📋 จัดการงาน
+          </button>
+          <button
+            className={`nav-btn ${activeTab === 'students' ? 'active' : ''}`}
+            onClick={() => setActiveTab('students')}
+          >
+            👩‍🎓 รายชื่อนักเรียน
+          </button>
+          <button
+            className={`nav-btn ${activeTab === 'settings' ? 'active' : ''}`}
+            onClick={() => setActiveTab('settings')}
+          >
+            ⚙️ ตั้งค่า
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'summary' && (
+          <div style={{ animation: 'fadeIn 0.3s ease' }}>
+            <div className="card-header" style={{ marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 600 }}>📊 ตารางสรุปการส่งงาน</h2>
+            </div>
+
+            {assignments.length === 0 ? (
+              <div className="empty-state">
+                <div className="icon">📭</div>
+                <p>ยังไม่มีงานที่สร้าง</p>
+              </div>
+            ) : (
+              <div className="table-wrapper" onMouseUp={handleMouseUpOrLeave} onMouseLeave={handleMouseUpOrLeave}>
+                <table className="data-table" style={{ userSelect: 'none' }}>
+                  <thead>
+                    <tr>
+                      <th>รหัส</th>
+                      <th>ชื่อ-สกุล</th>
+                      {assignments.map((a) => (
+                        <th key={a.id} title={a.title} style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {a.title.length > 15 ? a.title.substring(0, 15) + '...' : a.title}
+                        </th>
+                      ))}
+                      <th>รวม</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summaryData.map((row) => {
+                      const submittedCount = Object.values(row.submissions).filter((v) => v.submitted).length;
+                      return (
+                        <tr key={row.student.id}>
+                          <td style={{ fontFamily: 'var(--font-en)', fontWeight: 600 }}>{row.student.id}</td>
+                          <td>{row.student.name}</td>
+                          {assignments.map((a) => {
+                            const sub = row.submissions[a.id];
+                            return (
+                              <td
+                                key={a.id}
+                                className={sub?.submitted ? 'cell-submitted' : 'cell-not-submitted'}
+                                title={sub?.submitted ? `ส่งเมื่อ: ${new Date(sub.submittedAt).toLocaleString('th-TH')}` : 'ยังไม่ส่ง (คลิกหรือลากเพื่อสลับสถานะ)'}
+                                style={{ textAlign: 'center', cursor: 'pointer', position: 'relative' }}
+                                onMouseDown={() => handleCellMouseDown(row.student.id, a.id, sub?.submitted, sub?.score)}
+                                onMouseEnter={() => handleCellMouseEnter(row.student.id, a.id, sub?.submitted, sub?.score)}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                  <span style={{ fontSize: '1.2rem' }}>{sub?.submitted ? '✅' : '❌'}</span>
+                                  <input 
+                                    type="number" 
+                                    className="score-input"
+                                    placeholder="-"
+                                    value={sub?.score ?? ''} 
+                                    onChange={(e) => handleScoreChange(row.student.id, a.id, sub?.submitted, e.target.value)} 
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    style={{ 
+                                      width: '40px', 
+                                      padding: '2px 4px', 
+                                      fontSize: '0.85rem', 
+                                      textAlign: 'center',
+                                      border: '1px solid var(--border-color)',
+                                      borderRadius: '4px',
+                                      background: 'var(--bg-primary)',
+                                      color: 'var(--text-primary)'
+                                    }}
+                                  />
+                                </div>
+                              </td>
+                            );
+                          })}
+                          <td style={{
+                            fontFamily: 'var(--font-en)',
+                            fontWeight: 700,
+                            color: submittedCount === assignments.length ? 'var(--success)' : 'var(--warning)',
+                          }}>
+                            {submittedCount}/{assignments.length}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'assignments' && (
+          <div style={{ animation: 'fadeIn 0.3s ease' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 600 }}>📋 จัดการงาน</h2>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => setShowAddModal(true)}
+                style={{ width: 'auto' }}
+              >
+                ➕ เพิ่มงานใหม่
+              </button>
+            </div>
+
+            {assignments.length === 0 ? (
+              <div className="empty-state">
+                <div className="icon">📭</div>
+                <p>ยังไม่มีงาน — คลิก "เพิ่มงานใหม่" เพื่อเริ่มต้น</p>
+              </div>
+            ) : (
+              <div className="assignment-list">
+                {assignments.map((assignment) => {
+                  const submittedCount = summaryData.filter(
+                    (s) => s.submissions[assignment.id]?.submitted
+                  ).length;
+
+                  return (
+                    <div key={assignment.id} className="assignment-card submitted">
+                      <div className="assignment-top">
+                        <div className="assignment-info">
+                          <h3>{assignment.title}</h3>
+                          <p>{assignment.description}</p>
+                        </div>
+                        <div className="status-badge success">
+                          {submittedCount}/{totalStudents} คน
+                        </div>
+                      </div>
+
+                      <div className="assignment-meta" style={{ marginBottom: '12px' }}>
+                        {assignment.deadline && <span>📅 กำหนดส่ง: {assignment.deadline}</span>}
+                        <span>⭐ คะแนนเต็ม: {assignment.maxScore}</span>
+                        {assignment.worksheetUrl && (
+                          <span>🔗 <a href={assignment.worksheetUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }}>ดูใบงาน</a></span>
+                        )}
+                      </div>
+
+                      <div className="assignment-actions">
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => setEditAssignment(assignment)}
+                          >
+                            ✏️ แก้ไข
+                          </button>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={() => handleDeleteAssignment(assignment.id, assignment.title)}
+                          >
+                            🗑️ ลบงาน
+                          </button>
+                        </div>
+
+                      {/* Mini progress */}
+                      <div className="progress-bar-wrapper" style={{ marginTop: '12px' }}>
+                        <div
+                          className="progress-bar-fill"
+                          style={{ width: `${totalStudents > 0 ? (submittedCount / totalStudents) * 100 : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'students' && (() => {
+          // unique rooms for filter
+          const rooms = [...new Set(summaryData.map(s => s.student.room || '').filter(Boolean))].sort();
+          // filtered students
+          const filteredStudents = filterRoom ? summaryData.filter(s => s.student.room === filterRoom) : summaryData;
+          
+          return (
+            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+              <div className="card-header" style={{ marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '16px', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <h2 style={{ fontSize: '1.2rem', fontWeight: 600 }}>👩‍🎓 รายชื่อนักเรียน ({filteredStudents.length} คน)</h2>
+                  <select 
+                    className="form-input" 
+                    style={{ padding: '4px 8px', width: 'auto', minWidth: '120px' }}
+                    value={filterRoom}
+                    onChange={(e) => {
+                      setFilterRoom(e.target.value);
+                      setSelectedStudents([]); // reset selection when filter changes
+                    }}
+                  >
+                    <option value="">ทุกห้องเรียน</option>
+                    {rooms.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {selectedStudents.length > 0 && (
+                    <button className="btn btn-danger btn-sm" onClick={handleBulkDeleteStudents} style={{ width: 'auto' }}>
+                      🗑️ ลบที่เลือก ({selectedStudents.length})
+                    </button>
+                  )}
+                  <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkStudentModal(true)} style={{ width: 'auto' }}>
+                    📋 วางรายชื่อทีละเยอะๆ
+                  </button>
+                  <button className="btn btn-primary btn-sm" onClick={() => setShowAddStudentModal(true)} style={{ width: 'auto' }}>
+                    ➕ เพิ่มคนเดียว
+                  </button>
+                </div>
+              </div>
+
+              <div className="table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px', textAlign: 'center' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedStudents.length === filteredStudents.length && filteredStudents.length > 0}
+                          onChange={() => toggleSelectAll(filteredStudents)}
+                        />
+                      </th>
+                      <th>ลำดับ</th>
+                      <th>รหัส</th>
+                      <th>ชื่อ-สกุล</th>
+                      <th>ชื่อเล่น</th>
+                      <th>ห้องเรียน</th>
+                      <th>จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStudents.map((row, index) => {
+                      const isSelected = selectedStudents.includes(row.student.id);
+                      return (
+                        <tr key={row.student.id} style={{ backgroundColor: isSelected ? 'var(--bg-secondary)' : 'transparent' }}>
+                          <td style={{ textAlign: 'center' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={isSelected}
+                              onChange={() => toggleSelectStudent(row.student.id)}
+                            />
+                          </td>
+                          <td style={{ fontFamily: 'var(--font-en)' }}>{index + 1}</td>
+                          <td style={{ fontFamily: 'var(--font-en)', fontWeight: 600 }}>{row.student.id}</td>
+                          <td>{row.student.name}</td>
+                          <td>{row.student.nickname || '-'}</td>
+                          <td>{row.student.room || '-'}</td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button className="btn btn-secondary btn-sm" onClick={() => setEditStudent(row.student)} style={{ padding: '4px 8px', fontSize: '0.8rem', width: 'auto' }}>
+                                ✏️ แก้ไข
+                              </button>
+                              <button className="btn btn-danger btn-sm" onClick={() => handleDeleteStudent(row.student.id, row.student.name)} style={{ padding: '4px 8px', fontSize: '0.8rem', width: 'auto' }}>
+                                🗑️ ลบ
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
+
+        {activeTab === 'settings' && (
+          <div style={{ animation: 'fadeIn 0.3s ease' }}>
+            <div className="card-header" style={{ marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 600 }}>⚙️ ตั้งค่าระบบ</h2>
+            </div>
+            <div className="card" style={{ maxWidth: '600px' }}>
+              <div className="form-group">
+                <label>ชื่อวิชา</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={subjectName}
+                  onChange={(e) => setSubjectName(e.target.value)}
+                  placeholder="เช่น วิทยาศาสตร์และเทคโนโลยี"
+                />
+              </div>
+              <div className="form-group">
+                <label>ชื่อชั้นเรียน/ห้อง</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={className}
+                  onChange={(e) => setClassName(e.target.value)}
+                  placeholder="เช่น ม.1/2569"
+                />
+              </div>
+              <button 
+                className="btn btn-primary" 
+                style={{ width: 'auto' }}
+                disabled={savingSettings}
+                onClick={async () => {
+                  setSavingSettings(true);
+                  try {
+                    const res = await fetch('/api/settings', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ subjectName, className, adminKey })
+                    });
+                    if (res.ok) addToast('บันทึกการตั้งค่าสำเร็จ');
+                    else addToast('เกิดข้อผิดพลาด', 'error');
+                  } catch (e) {
+                    addToast('เกิดข้อผิดพลาด', 'error');
+                  } finally {
+                    setSavingSettings(false);
+                  }
+                }}
+              >
+                {savingSettings ? 'กำลังบันทึก...' : '💾 บันทึกการตั้งค่า'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Add/Edit Assignment Modal */}
+        {(showAddModal || editAssignment) && (
+          <AssignmentModal
+            adminKey={adminKey}
+            assignment={editAssignment}
+            onClose={() => {
+              setShowAddModal(false);
+              setEditAssignment(null);
+            }}
+            onSuccess={() => {
+              setShowAddModal(false);
+              setEditAssignment(null);
+              addToast(editAssignment ? 'แก้ไขงานสำเร็จ' : 'เพิ่มงานใหม่สำเร็จ');
+              fetchData(adminKey);
+            }}
+          />
+        )}
+
+        {/* Add/Edit Student Modal */}
+        {(showAddStudentModal || editStudent) && (
+          <StudentModal
+            adminKey={adminKey}
+            student={editStudent}
+            onClose={() => {
+              setShowAddStudentModal(false);
+              setEditStudent(null);
+            }}
+            onSuccess={() => {
+              setShowAddStudentModal(false);
+              setEditStudent(null);
+              addToast(editStudent ? 'แก้ไขรายชื่อสำเร็จ' : 'เพิ่มนักเรียนใหม่สำเร็จ');
+              fetchData(adminKey);
+            }}
+          />
+        )}
+
+        {/* Bulk Student Modal */}
+        {showBulkStudentModal && (
+          <BulkStudentModal
+            adminKey={adminKey}
+            onClose={() => setShowBulkStudentModal(false)}
+            onSuccess={() => {
+              setShowBulkStudentModal(false);
+              addToast('นำเข้ารายชื่อสำเร็จ');
+              fetchData(adminKey);
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
